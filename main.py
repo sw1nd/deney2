@@ -177,15 +177,48 @@ def wait_key(win, key_list):
 
 # ------------------ Başlat ------------------
 def main():
-    # Katılımcı bilgisi
-    dlg = gui.Dlg(title="Deney Başlat")
-    dlg.addText("Katılımcı Bilgisi")
-    dlg.addField("Katılımcı Ismi:")
-    ok = dlg.show()
-    if dlg.OK:
-        participant = ok[0].strip() if ok and ok[0] else "anon"
-    else:
-        safe_exit(None)
+    # --- DEMOGRAFİK BİLGİLER (ZORUNLU) ---  # İngilizce satırı gizler
+    # --- DEMOGRAFİK BİLGİLER (ZORUNLU; etiketlerde * var, İngilizce satır gizlenir) ---
+    while True:
+        dlg = gui.Dlg(title="Katılımcı Bilgileri")  # İngilizce 'required' uyarısını kaldır
+
+        # Etiketlerde * gösterimi
+        dlg.addField("Ad - Soyad :")
+        dlg.addField("Yaş :")
+        dlg.addField("Eğitim durumu :")
+        dlg.addField("Meslek :")
+        dlg.addField("E-posta :")
+
+        ok = dlg.show()
+        if not dlg.OK:
+            safe_exit(None)  # İptal → çık
+
+        name_surname = (ok[0] or "").strip()
+        age         = (ok[1] or "").strip()
+        education   = (ok[2] or "").strip()
+        profession  = (ok[3] or "").strip()
+        email       = (ok[4] or "").strip()
+
+        # Zorunlu alan kontrolü
+        missing = [lbl for lbl, val in [
+            ("Ad - Soyad", name_surname),
+            ("Yaş", age),
+            ("Eğitim durumu", education),
+            ("Meslek", profession),
+            ("E-posta", email),
+        ] if not val]
+
+        # (Opsiyonel) çok basit e-posta biçim kontrolü
+        if email and ("@" not in email or "." not in email.split("@")[-1]):
+            missing.append("E-posta (geçerli biçim)")
+
+        if not missing:
+            participant = name_surname  # artık boş olamaz
+            break
+
+        err = gui.Dlg(title="Eksik/Geçersiz Bilgi")
+        err.addText("Tüm alanlar ZORUNLUDUR. Lütfen düzeltin:\n- " + "\n- ".join(missing))
+        err.show()
 
     timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
     ensure_dir(DATA_DIR)
@@ -220,12 +253,27 @@ def main():
         w.writerow([participant, timestamp, "consent",
                     "", "", "Consent",
                     key, ("onay" if consent_given else "ret"), f"{t:.4f}"])
+
     if not consent_given:
         event.clearEvents()
         draw_centered_text(win, "Onay verilmedi. Deney sonlandırılıyor.", height=0.05)
         win.flip()
         core.wait(2.0)
         safe_exit(win)
+
+    # --- Onam VERİLDİYSE demografik cevapları kaydet ---
+    demographics = [
+        ("Ad - Soyad", name_surname),
+        ("Yaş", age),
+        ("Eğitim durumu", education),
+        ("Meslek", profession),
+        ("E-posta", email),
+    ]
+    with open(results_csv, 'a', newline='', encoding='utf-8-sig') as f:
+        w = csv.writer(f)
+        for label, value in demographics:
+            w.writerow([participant, timestamp, "demographics",
+                        "", "", label, value, value, ""])
 
     # ------------------ Setleri hazırla ------------------
     sets = list_sets(STIM_ROOT)
