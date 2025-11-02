@@ -11,11 +11,38 @@ def resource_path(*parts):
     return os.path.join(base, *parts)
 
 def get_data_dir():
-    # Kullanıcı belgelerinde kalıcı veri klasörü
-    base = os.path.join(os.path.expanduser("~"), "Documents", "DeneyVerileri")
-    if not os.path.exists(base):
-        os.makedirs(base)
-    return base
+    """
+    Windows/macOS'ta güvenli veri klasörü. Öncelik: Documents/Belgeler.
+    OneDrive yönlendirmelerini de dener.
+    """
+    home = os.path.expanduser("~")
+    candidates = []
+
+    if sys.platform.startswith("win"):
+        up = os.environ.get("USERPROFILE", home)
+        od = os.environ.get("OneDrive") or os.environ.get("OneDriveConsumer")
+        candidates = [
+            os.path.join(up, "Documents"),
+            os.path.join(up, "Belgeler"),
+        ]
+        if od:
+            candidates.append(os.path.join(od, "Documents"))
+            candidates.append(os.path.join(od, "Belgeler"))
+    else:
+        candidates = [os.path.join(home, "Documents")]
+
+    for base in candidates:
+        try:
+            path = os.path.join(base, "DeneyVerileri")
+            os.makedirs(path, exist_ok=True)
+            return path
+        except Exception:
+            continue
+
+    # Son çare: ev klasörü
+    path = os.path.join(home, "DeneyVerileri")
+    os.makedirs(path, exist_ok=True)
+    return path
 
 # ------------------ Ayarlar ------------------
 FULLSCREEN = True
