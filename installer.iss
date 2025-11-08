@@ -1,11 +1,11 @@
 [Setup]
 AppId={{0A1B2C3D-4E5F-6789-ABCD-0123456789AB}}
 AppName=Deney Uygulamasi
-AppVersion=1.0.4
-VersionInfoVersion=1.0.4
+AppVersion=1.0.6
+VersionInfoVersion=1.0.6
 DefaultDirName={userappdata}\DeneyUygulamasi
 DefaultGroupName=Deney Uygulamasi
-OutputBaseFilename=DeneyUygulamasi-Setup-1.0.4
+OutputBaseFilename=DeneyUygulamasi-Setup-1.0.6
 OutputDir=output
 CloseApplications=yes
 RestartApplications=no

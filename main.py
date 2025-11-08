@@ -378,37 +378,30 @@ def main():
         dlg = gui.Dlg(title="Katılımcı Bilgileri")  # İngilizce 'required' uyarısını kaldır
 
         # Etiketlerde * gösterimi
-        dlg.addField("Ad - Soyad :")
+        dlg.addField("Rumuz :")
         dlg.addField("Yaş :")
         dlg.addField("Eğitim durumu :")
         dlg.addField("Meslek :")
-        dlg.addField("E-posta :")
 
         ok = dlg.show()
         if not dlg.OK:
             safe_exit(None)  # İptal → çık
 
-        name_surname = (ok[0] or "").strip()
-        age         = (ok[1] or "").strip()
-        education   = (ok[2] or "").strip()
-        profession  = (ok[3] or "").strip()
-        email       = (ok[4] or "").strip()
+        nickname = (ok[0] or "").strip()
+        age      = (ok[1] or "").strip()
+        education = (ok[2] or "").strip()
+        profession = (ok[3] or "").strip()
 
         # Zorunlu alan kontrolü
         missing = [lbl for lbl, val in [
-            ("Ad - Soyad", name_surname),
+            ("Rumuz", nickname),
             ("Yaş", age),
             ("Eğitim durumu", education),
             ("Meslek", profession),
-            ("E-posta", email),
         ] if not val]
 
-        # (Opsiyonel) çok basit e-posta biçim kontrolü
-        if email and ("@" not in email or "." not in email.split("@")[-1]):
-            missing.append("E-posta (geçerli biçim)")
-
         if not missing:
-            participant = name_surname  # artık boş olamaz
+            participant = nickname  # artık boş olamaz
             break
 
         err = gui.Dlg(title="Eksik/Geçersiz Bilgi")
@@ -459,11 +452,10 @@ def main():
 
     # --- Onam VERİLDİYSE demografik cevapları kaydet ---
     demographics = [
-        ("Ad - Soyad", name_surname),
+        ("Rumuz", nickname),
         ("Yaş", age),
         ("Eğitim durumu", education),
         ("Meslek", profession),
-        ("E-posta", email),
     ]
     with open(results_csv, 'a', newline='', encoding='utf-8-sig') as f:
         w = csv.writer(f)
