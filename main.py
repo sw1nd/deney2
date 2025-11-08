@@ -2,6 +2,7 @@
 
 # --- EXE (--noconsole) kapanışında logging'in patlamasını engelle ---
 import sys, io, os, csv, glob, datetime
+from PIL import Image
 
 class _DevNull(io.TextIOBase):
     def write(self, s): return len(s or "")
@@ -128,11 +129,10 @@ Bu araştırma Atılım Üniversitesi Klinik Psikoloji Yüksek Lisans Programı 
 Araştırmaya katılımınız halinde, Instagram görsellerine dayanarak kişilik özelliklerini değerlendirmeniz istenecek ve her bir kişi için Ten Item Personality Inventory (TIPI) maddelerini yanıtlamanız beklenecektir. TIPI, bir bireyin kişilik özelliklerini genel hatlarıyla değerlendirmeye yönelik 10 maddelik kısa bir testtir. Her bir Instagram görseli ekranda 10 saniye boyunca gösterilecektir. Bir kişiye ait üç görseli inceledikten sonra, o kişiye dair izleniminize dayanarak Ten Item Personality Inventory (TIPI) testini doldurmanız beklenecektir. Daha sonra ekrana bu kişiyle arkadaş olmak ister misin? Sorusu gelecektir. Yaptığınız değerlendirmeler, yalnızca araştırmanın amacı doğrultusunda kullanılacak ve herhangi bir kişisel bilgiyi içermeyecektir. Çalışmaya katılımınız tamamen gönüllülük esasına dayanmaktadır. Çalışmanın süresi yaklaşık on dakika olacaktır. Çalışmaya katılmayı reddedebilir veya katıldıktan sonra istediğiniz aşamada, gerekçe göstermeksizin ayrılabilirsiniz. Çalışmadan ayrılmanız durumunda sizden toplanan veriler imha edilecektir.
 
 Test, özel hayatınıza müdahale edecek ya da psikolojik rahatsızlık yaratacak herhangi bir içerik barındırmaz. Ancak herhangi bir nedenden dolayı testi uygulamak istemezseniz, araştırmadan neden belirtmeden ayrılmakta özgürsünüz. Çalışmaya katılımınız için şimdiden teşekkür ederim. Çalışma hakkında daha fazla bilgi almak isterseniz araştırmayı yürüten Mine Ayasulu ile (psk.mineayasulu@gmail.com) iletişime geçebilirsiniz.
+"""
 
-[E] Onaylıyorum  |  [H] Onaylamıyorum"""
-
-LIKERT_INSTRUCTION = "Lütfen bir yanıt seçin (1–7). Boş bırakma yok."
-PHOTO_HINT = f"Fotoğraf en fazla {int(PHOTO_MAX_SEC)} sn gösterilecek. Geçmek için [{SKIP_KEY.upper()}]"
+LIKERT_INSTRUCTION = "Lütfen bir yanıt seçin (1–7 tuşları veya butonlara tıklayın). Boş bırakma yok."
+PHOTO_HINT = f"Fotoğraf en fazla {int(PHOTO_MAX_SEC)} sn gösterilecek. Geçmek için [{SKIP_KEY.upper()}] tuşuna basın veya fotoğrafa tıklayın"
 
 LIKERT_LABELS = {
     '1': 'Hiç Katılmıyorum',
@@ -158,6 +158,37 @@ def list_images(set_folder):
     imgs = sorted([p for p in glob.glob(os.path.join(set_folder, '*')) if p.lower().endswith(exts)])
     return imgs[:3]  # İlk 3 görsel
 
+def get_image_size(img_path):
+    """Görüntünün orijinal boyutlarını döndürür"""
+    try:
+        with Image.open(img_path) as img:
+            return img.size  # (width, height)
+    except Exception:
+        return None
+
+def calculate_image_size(img_path, max_width=1.6, max_height=0.9):
+    """Görüntüyü aspect ratio'yu koruyarak ekrana sığdırır"""
+    img_size = get_image_size(img_path)
+    if img_size is None:
+        return (max_width, max_height)  # Varsayılan boyut
+    
+    img_width, img_height = img_size
+    aspect_ratio = img_width / img_height
+    
+    # Ekran aspect ratio'su (height units kullanıyoruz)
+    max_aspect = max_width / max_height
+    
+    if aspect_ratio > max_aspect:
+        # Görüntü daha geniş, genişliğe göre ölçekle
+        width = max_width
+        height = max_width / aspect_ratio
+    else:
+        # Görüntü daha yüksek, yüksekliğe göre ölçekle
+        height = max_height
+        width = max_height * aspect_ratio
+    
+    return (width, height)
+
 def draw_centered_text(win, text, height=0.06, pos=(0,0)):
     stim = visual.TextStim(
         win, text=text, color=TEXT_COLOR, font=FONT_NAME,
@@ -173,6 +204,170 @@ def wait_key(win, key_list):
                 safe_exit(win)
             if k in key_list:
                 return k, t
+
+def create_likert_buttons(win):
+    """Likert ölçeği için 1-7 butonları oluşturur"""
+    buttons = []
+    button_width = 0.14
+    button_height = 0.08
+    spacing = 0.03
+    total_width = 7 * button_width + 6 * spacing
+    start_x = -total_width / 2 + button_width / 2
+    
+    for i, key in enumerate(LIKERT_KEYS):
+        x_pos = start_x + i * (button_width + spacing)
+        rect = visual.Rect(
+            win, width=button_width, height=button_height,
+            pos=(x_pos, -0.25), fillColor='gray', lineColor='white',
+            lineWidth=2, units='height'
+        )
+        label = visual.TextStim(
+            win, text=key, color=TEXT_COLOR, font=FONT_NAME,
+            height=0.04, pos=(x_pos, -0.25), units='height'
+        )
+        # Açıklama metnini kısalt - çok uzun metinleri kısalt
+        desc_text = LIKERT_LABELS[key]
+        # Uzun metinleri iki satıra böl
+        if len(desc_text) > 18:
+            words = desc_text.split()
+            mid = len(words) // 2
+            if mid > 0:
+                desc_text = ' '.join(words[:mid]) + '\n' + ' '.join(words[mid:])
+            else:
+                # Tek kelime ise ortadan böl
+                mid_char = len(desc_text) // 2
+                desc_text = desc_text[:mid_char] + '\n' + desc_text[mid_char:]
+        
+        desc = visual.TextStim(
+            win, text=desc_text, color=TEXT_COLOR, font=FONT_NAME,
+            height=0.02, pos=(x_pos, -0.36), units='height',
+            wrapWidth=button_width * 0.85, alignText='center'
+        )
+        buttons.append({
+            'key': key,
+            'rect': rect,
+            'label': label,
+            'desc': desc,
+            'x': x_pos,
+            'width': button_width,
+            'height': button_height
+        })
+    return buttons
+
+def create_yes_no_buttons(win, evet_text='E: Evet', hayir_text='H: Hayır', y_pos=-0.25):
+    """Evet/Hayır butonları oluşturur (onam ve arkadaşlık için)"""
+    buttons = []
+    # Metin uzunluğuna göre buton genişliğini ayarla
+    max_text_len = max(len(evet_text), len(hayir_text))
+    if max_text_len > 12:  # Uzun metinler için daha geniş buton
+        button_width = 0.35
+        button_height = 0.12
+        text_height = 0.035
+    else:
+        button_width = 0.25
+        button_height = 0.12
+        text_height = 0.04
+    spacing = 0.1
+    
+    # Evet butonu
+    evet_rect = visual.Rect(
+        win, width=button_width, height=button_height,
+        pos=(-button_width/2 - spacing/2, y_pos), fillColor='gray',
+        lineColor='white', lineWidth=2, units='height'
+    )
+    evet_label = visual.TextStim(
+        win, text=evet_text, color=TEXT_COLOR, font=FONT_NAME,
+        height=text_height, pos=(-button_width/2 - spacing/2, y_pos), 
+        units='height', wrapWidth=button_width * 0.9, alignText='center'
+    )
+    buttons.append({
+        'key': 'e',
+        'rect': evet_rect,
+        'label': evet_label,
+        'x': -button_width/2 - spacing/2,
+        'y': y_pos,
+        'width': button_width,
+        'height': button_height
+    })
+    
+    # Hayır butonu
+    hayir_rect = visual.Rect(
+        win, width=button_width, height=button_height,
+        pos=(button_width/2 + spacing/2, y_pos), fillColor='gray',
+        lineColor='white', lineWidth=2, units='height'
+    )
+    hayir_label = visual.TextStim(
+        win, text=hayir_text, color=TEXT_COLOR, font=FONT_NAME,
+        height=text_height, pos=(button_width/2 + spacing/2, y_pos), 
+        units='height', wrapWidth=button_width * 0.9, alignText='center'
+    )
+    buttons.append({
+        'key': 'h',
+        'rect': hayir_rect,
+        'label': hayir_label,
+        'x': button_width/2 + spacing/2,
+        'y': y_pos,
+        'width': button_width,
+        'height': button_height
+    })
+    
+    return buttons
+
+def create_friend_buttons(win):
+    """Arkadaşlık sorusu için Evet/Hayır butonları oluşturur"""
+    return create_yes_no_buttons(win, 'E: Evet', 'H: Hayır', -0.25)
+
+def wait_key_or_click(win, key_list, buttons, draw_func=None):
+    """Hem klavye hem de buton tıklamalarını bekler
+    
+    Args:
+        win: PsychoPy window
+        key_list: Geçerli klavye tuşları listesi
+        buttons: Buton listesi
+        draw_func: Opsiyonel, ekranı çizmek için fonksiyon (soru metni vs. için)
+    """
+    mouse = event.Mouse(win=win)
+    timer = core.Clock()
+    start_time = timer.getTime()
+    
+    # İlk ekranı çiz
+    if draw_func:
+        draw_func()
+    for btn in buttons:
+        btn['rect'].draw()
+        btn['label'].draw()
+        if 'desc' in btn:
+            btn['desc'].draw()
+    win.flip()
+    
+    while True:
+        # Klavye kontrolü
+        keys = event.getKeys(keyList=key_list + [EXIT_KEY], timeStamped=True)
+        for k, t in keys:
+            if k == EXIT_KEY:
+                safe_exit(win)
+            if k in key_list:
+                return k, t
+        
+        # Mouse kontrolü - tıklama olayını kontrol et
+        mouse_clicked = mouse.getPressed()[0]
+        if mouse_clicked:
+            # Tıklama bırakılana kadar bekle (basılı tutma durumunu önlemek için)
+            while mouse.getPressed()[0]:
+                core.wait(0.01)
+            mouse_pos = mouse.getPos()
+            for btn in buttons:
+                btn_x = btn['x']
+                btn_y = btn.get('y', -0.25)  # Varsayılan y pozisyonu
+                btn_width = btn['width']
+                btn_height = btn['height']
+                # Buton sınırlarını kontrol et (height units kullanıyoruz)
+                if (btn_x - btn_width/2 <= mouse_pos[0] <= btn_x + btn_width/2 and
+                    btn_y - btn_height/2 <= mouse_pos[1] <= btn_y + btn_height/2):
+                    rt = timer.getTime() - start_time
+                    return btn['key'], rt
+        
+        core.wait(0.01)  # CPU kullanımını azalt
 
 
 # ------------------ Başlat ------------------
@@ -238,13 +433,14 @@ def main():
 
     # Pencere
     win = visual.Window(fullscr=FULLSCREEN, color=BG_COLOR, units='height')
-    win.mouseVisible = False
+    win.mouseVisible = True  # Butonlar için mouse görünür olmalı
 
     # ------------------ Onam ------------------
     event.clearEvents()
-    draw_centered_text(win, CONSENT_TEXT, height=0.025)
-    win.flip()
-    key, t = wait_key(win, ['e','h'])
+    consent_buttons = create_yes_no_buttons(win, 'E: Onaylıyorum', 'H: Onaylamıyorum', -0.35)
+    def draw_consent_screen():
+        draw_centered_text(win, CONSENT_TEXT, height=0.025, pos=(0, 0.1))
+    key, t = wait_key_or_click(win, ['e','h'], consent_buttons, draw_consent_screen)
     consent_given = (key == 'e')
 
     # Onam kaydı
@@ -283,6 +479,7 @@ def main():
     # ------------------ Deney Döngüsü ------------------
     total_sets = min(10, len(sets))  # 10 set
     timer = core.Clock()
+    mouse = event.Mouse(win=win)  # Mouse'u bir kez oluştur
 
     for si in range(total_sets):
         set_folder = sets[si]
@@ -290,9 +487,11 @@ def main():
         if len(images) != 3:
             print(f"[Uyarı] {set_folder} içinde 3 görsel bulunamadı. Bulunan: {len(images)}")
 
-        # --- 3 Fotoğraf (max 10 sn, SKIP ile geç) ---
+        # --- 3 Fotoğraf (max 10 sn, SKIP ile geç veya tıklayarak geç) ---
         for img_path in images:
-            pic = visual.ImageStim(win, image=img_path, size=(1.6, 0.9), units='height')
+            # Görüntü boyutunu aspect ratio'yu koruyarak hesapla
+            img_size = calculate_image_size(img_path, max_width=1.6, max_height=0.9)
+            pic = visual.ImageStim(win, image=img_path, size=img_size, units='height')
             hint = visual.TextStim(win, text=PHOTO_HINT, color=TEXT_COLOR, font=FONT_NAME, height=0.03, pos=(0,-0.45))
             event.clearEvents()
             timer.reset()
@@ -300,20 +499,37 @@ def main():
                 pic.draw()
                 hint.draw()
                 win.flip()
+                
+                # Klavye kontrolü
                 keys = event.getKeys(keyList=[SKIP_KEY, EXIT_KEY])
                 if EXIT_KEY in keys:
                     safe_exit(win)
                 if SKIP_KEY in keys:
                     break
+                
+                # Mouse tıklama kontrolü - fotoğrafa tıklanınca geç
+                if mouse.getPressed()[0]:  # Sol tık
+                    # Tıklama bırakılana kadar bekle
+                    while mouse.getPressed()[0]:
+                        core.wait(0.01)
+                    mouse_pos = mouse.getPos()
+                    # Fotoğrafın sınırlarını kontrol et (merkez 0,0)
+                    img_width, img_height = img_size
+                    if (-img_width/2 <= mouse_pos[0] <= img_width/2 and
+                        -img_height/2 <= mouse_pos[1] <= img_height/2):
+                        break
 
         # --- 10 Likert soru (boş bırakılamaz) ---
+        likert_buttons = create_likert_buttons(win)
         for qi, qtext in enumerate(LIKERT_QUESTIONS, start=1):
             event.clearEvents()
-            draw_centered_text(win, f"Soru {qi}/10\n\n{qtext}", height=0.05, pos=(0, 0.1))
-            draw_centered_text(win, LIKERT_INSTRUCTION, height=0.035, pos=(0, -0.05))
-            draw_centered_text(win, LIKERT_SCALE_HINT, height=0.03, pos=(0, -0.12))
-            win.flip()
-            resp_key, rt = wait_key(win, LIKERT_KEYS)
+            # Çizim fonksiyonu
+            def draw_likert_screen():
+                draw_centered_text(win, f"Soru {qi}/10\n\n{qtext}", height=0.05, pos=(0, 0.1))
+                draw_centered_text(win, LIKERT_INSTRUCTION, height=0.035, pos=(0, -0.05))
+                draw_centered_text(win, LIKERT_SCALE_HINT, height=0.03, pos=(0, -0.12))
+            
+            resp_key, rt = wait_key_or_click(win, LIKERT_KEYS, likert_buttons, draw_likert_screen)
 
             with open(results_csv, 'a', newline='', encoding='utf-8-sig') as f:
                 w = csv.writer(f)
@@ -325,10 +541,13 @@ def main():
 
         # --- Arkadaşlık Sorusu (E/H) ---
         event.clearEvents()
-        draw_centered_text(win, FRIENDSHIP_QUESTION, height=0.05, pos=(0, 0.05))
-        draw_centered_text(win, "E: Evet | H: Hayır", height=0.035, pos=(0, -0.05))
-        win.flip()
-        f_key, f_rt = wait_key(win, FRIEND_KEYS)
+        friend_buttons = create_friend_buttons(win)
+        # Çizim fonksiyonu
+        def draw_friend_screen():
+            draw_centered_text(win, FRIENDSHIP_QUESTION, height=0.05, pos=(0, 0.05))
+           
+        
+        f_key, f_rt = wait_key_or_click(win, FRIEND_KEYS, friend_buttons, draw_friend_screen)
         friend_resp = "Evet" if f_key == 'e' else "Hayır"
 
         with open(results_csv, 'a', newline='', encoding='utf-8-sig') as f:
